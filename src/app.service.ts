@@ -128,6 +128,11 @@ export class AppService {
       message: '매칭 프로세스가 시작되었습니다.',
       patientId,
       channel: patientChannel,
+      hospitals: hospitals.map((h) => ({
+        hospitalId: h.id,
+        hospitalName: h.name,
+        hospitalNumber: h.number,
+      })),
     };
   }
 
