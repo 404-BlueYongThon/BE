@@ -42,8 +42,23 @@ class EmergencyRequest(BaseModel):
     callback_url: str  # 결과 보고를 받을 클라이언트 주소
 
 # --- 결과 전송 함수 ---
+async def send_single_result(emergency_id: str, hospital_id: int, status: str):
+    batch = emergency_batches.get(emergency_id)
+    if not batch:
+        return
+    payload = {
+        "patientId": batch["data"]["patientId"],
+        "results": [{"hospitalId": hospital_id, "status": status}]
+    }
+    async with httpx.AsyncClient() as client:
+        try:
+            await client.post(batch["data"]["callback_url"], json=payload, timeout=5.0)
+            print(f"📡 [개별 보고] 병원 {hospital_id}: {status}")
+        except Exception as e:
+            print(f"❌ [보고 실패] {e}")
+
+
 async def send_batch_result(emergency_id: str):
-    """배치 내 모든 병원의 응답 상태를 클라이언트 백엔드로 전송"""
     batch = emergency_batches.get(emergency_id)
     if not batch or batch["is_finalized"]:
         return
@@ -149,20 +164,18 @@ async def handle_gather(emergency_id: str, hospital_id: int, Digits: str = Form(
         return Response(content=response.to_xml(), media_type="application/xml")
 
     if Digits == "1":
-        # 승인 시: 해당 병원 'accepted' 처리 후 즉시 보고 및 나머지 종료
         batch["results"][hospital_id] = "accepted"
         print(f"✅ [ID {hospital_id}] 승인")
         response.say("수용 확정되었습니다. 감사합니다.", language='ko-KR')
-        asyncio.create_task(send_batch_result(emergency_id))
+        asyncio.create_task(send_single_result(emergency_id, hospital_id, "accepted"))
         asyncio.create_task(terminate_others(emergency_id, CallSid))
     
     elif Digits == "2":
-        # 거절 시: 해당 병원 'rejected' 처리
         batch["results"][hospital_id] = "rejected"
         print(f"❌ [ID {hospital_id}] 거절")
         response.say("거절 처리되었습니다.", language='ko-KR')
+        asyncio.create_task(send_single_result(emergency_id, hospital_id, "rejected"))
         
-        # 모든 병원이 응답을 마쳤는지 확인 (모두 거절된 경우 보고)
         if all(status in ["rejected", "failed", "no_answer"] for status in batch["results"].values()):
             asyncio.create_task(send_batch_result(emergency_id))
 
