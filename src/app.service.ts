@@ -118,9 +118,51 @@ export class AppService {
     };
   }
 
-  // 2. AI 서버에서 병원의 수락/거절 결과를 콜백할 때 호출
-  async acceptRequest(hospitalId: number, patientId: number, status: string) {
+  // 2. AI 서버에서 병원들의 수락/거절 결과를 한꺼번에 콜백할 때 호출
+  async handleCallback(results: { hospitalId: number; patientId: number; status: string }[]) {
+    const processed: any[] = [];
+
+    // 수락(accepted)을 먼저 처리하기 위해 정렬
+    const sorted = [...results].sort((a, b) => {
+      if (a.status === 'accepted') return -1;
+      if (b.status === 'accepted') return 1;
+      return 0;
+    });
+
+    for (const result of sorted) {
+      const res = await this.processResult(result.hospitalId, result.patientId, result.status);
+      processed.push({ hospitalId: result.hospitalId, ...res });
+
+      // 수락된 게 있으면 나머지는 자동 거절 처리됨
+      if (result.status === 'accepted') break;
+    }
+
+    return { success: true, processed };
+  }
+
+  // 개별 병원 결과 처리
+  private async processResult(hospitalId: number, patientId: number, status: string) {
     const patientChannel = `patient-${patientId}`;
+
+    if (status === 'no_answer') {
+      // 무응답 → 거절과 동일 처리
+      await prisma.hospitalRequest.updateMany({
+        where: { hospitalId, patientId, accepted: null },
+        data: { accepted: false },
+      });
+
+      const hospital = await prisma.hospital.findUnique({ where: { id: hospitalId } });
+      if (hospital) {
+        this.sseService.emit(patientChannel, {
+          message: `${hospital.name} 병원이 응답하지 않았습니다.`,
+          hospitalId: hospital.id,
+          hospitalName: hospital.name,
+          status: 'no_answer',
+        });
+      }
+      return { status: 'no_answer' };
+    }
+
     const accepted = status === 'accepted';
 
     // 해당 요청의 상태 업데이트
@@ -130,10 +172,7 @@ export class AppService {
     });
 
     if (request.count === 0) {
-      return {
-        success: false,
-        message: '이미 처리되었거나 존재하지 않는 요청입니다.',
-      };
+      return { status: 'already_processed' };
     }
 
     const hospital = await prisma.hospital.findUnique({
@@ -141,7 +180,7 @@ export class AppService {
     });
 
     if (!hospital) {
-      return { success: false, message: '병원을 찾을 수 없습니다.' };
+      return { status: 'hospital_not_found' };
     }
 
     if (accepted) {
@@ -161,10 +200,8 @@ export class AppService {
       });
       this.logger.log(`병원 ${hospital.name}(${hospitalId})이 환자 ${patientId} 수용 수락`);
 
-      // SSE 연결 종료
       this.sseService.unsubscribe(patientChannel);
-
-      return { success: true, status: 'accepted' };
+      return { status: 'accepted' };
     } else {
       // 거절 → SSE로 응급대원에게 알림
       this.sseService.emit(patientChannel, {
@@ -190,7 +227,7 @@ export class AppService {
         });
       }
 
-      return { success: true, status: 'rejected' };
+      return { status: 'rejected' };
     }
   }
 

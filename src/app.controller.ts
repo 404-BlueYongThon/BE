@@ -64,15 +64,19 @@ export class AppController {
     return result;
   }
 
-  // 3. 수락/거절 콜백 (AI 서버가 호출)
+  // 3. 수락/거절 배치 콜백 (AI 서버가 호출)
   @Post('emergency/callback')
-  @ApiTags('매칭')
+  @ApiTags('콜백')
   @ApiOperation({
-    summary: '수락/거절 콜백',
-    description: 'AI 서버(localhost:8000)에서 병원의 수락/거절 결과를 콜백합니다. SSE로 응급대원에게 결과를 전달합니다.',
+    summary: '병원 수락/거절 배치 콜백',
+    description: `AI 서버(localhost:8000)에서 병원들의 수락/거절/무응답 결과를 한꺼번에 콜백합니다.
+results 배열에 각 병원의 결과가 담겨옵니다.
+- accepted: 수락 → 응급대원에게 SSE로 수락 알림 + 나머지 요청 자동 거절 + SSE 종료
+- rejected: 거절 → 응급대원에게 SSE로 거절 알림 (전부 거절 시 all_rejected 알림)
+- no_answer: 무응답 → 거절과 동일 처리`,
   })
-  @ApiResponse({ status: 200, description: '수락/거절 처리 결과 반환' })
+  @ApiResponse({ status: 200, description: '각 병원별 처리 결과 배열 반환' })
   async acceptRequest(@Body() dto: AcceptRequestDto) {
-    return this.appService.acceptRequest(dto.hospitalId, dto.patientId, dto.status);
+    return this.appService.handleCallback(dto.results);
   }
 }
