@@ -94,6 +94,15 @@ export class AppService {
       callback_url: `${callbackBaseUrl}/emergency/callback`,
     };
 
+    for (const hospital of hospitals) {
+      this.sseService.emit(patientChannel, {
+        hospitalId: hospital.id,
+        hospitalName: hospital.name,
+        hospitalNumber: hospital.number,
+        status: 'calling',
+      });
+    }
+
     this.logger.log(`AI 서버로 매칭 요청 전송: ${aiServerUrl}`);
 
     // 비동기로 AI 서버에 전송 (응답 대기하지 않음)
