@@ -73,7 +73,7 @@ async def start_broadcast(req: EmergencyRequest):
     # 배치 초기화 (모든 병원의 초기 상태는 'calling')
     emergency_batches[emergency_id] = {
         "data": req.dict(),
-        "results": {h.hospitalId: "no_answer" for h in req.hospitals},
+        "results": {h.hospitalId: "calling" for h in req.hospitals},
         "is_finalized": False
     }
 
