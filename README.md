@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![404 Found Logo](https://via.placeholder.com/400x100/4A90E2/FFFFFF?text=404+Found)
+![404 Found Banner](./assets/banner.png)
 
 **응급 환자를 위한 AI 병원 매칭 시스템**
 
