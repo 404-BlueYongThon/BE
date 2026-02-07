@@ -72,12 +72,12 @@ export class AppService {
     }
 
     // AI 서버(localhost:8000)로 병원 + 환자 정보 전송
-    const aiServerUrl = this.configService.get<string>('AI_SERVER_URL') || 'http://localhost:8000';
+    const aiServerUrl = this.configService.get<string>('AI_SERVER_URL') || 'http://localhost:8000/broadcast';
     const callbackBaseUrl = this.configService.get<string>('CALLBACK_BASE_URL') || 'http://localhost:3000';
 
     const payload = {
       hospitals: hospitals.map((h) => ({
-        id: h.id,
+        hospitalId: h.id,
         phone: h.number,
       })),
       patientId,

@@ -34,6 +34,10 @@ export class EmergencySseService {
 
   // 연결 종료 시 정리
   unsubscribe(id: string) {
-    this.clients.delete(id);
+    const client = this.clients.get(id);
+    if (client) {
+      client.complete(); // Observable 종료
+      this.clients.delete(id);
+    }
   }
 }
