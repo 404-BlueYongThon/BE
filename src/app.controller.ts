@@ -77,6 +77,6 @@ results 배열에 각 병원의 결과가 담겨옵니다.
   })
   @ApiResponse({ status: 200, description: '각 병원별 처리 결과 배열 반환' })
   async acceptRequest(@Body() dto: AcceptRequestDto) {
-    return this.appService.handleCallback(dto.results);
+    return this.appService.handleCallback(dto.patientId, dto.results);
   }
 }

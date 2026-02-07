@@ -119,7 +119,7 @@ export class AppService {
   }
 
   // 2. AI 서버에서 병원들의 수락/거절 결과를 한꺼번에 콜백할 때 호출
-  async handleCallback(results: { hospitalId: number; patientId: number; status: string }[]) {
+  async handleCallback(patientId: number, results: { hospitalId: number; status: string }[]) {
     const processed: any[] = [];
 
     // 수락(accepted)을 먼저 처리하기 위해 정렬
@@ -130,7 +130,7 @@ export class AppService {
     });
 
     for (const result of sorted) {
-      const res = await this.processResult(result.hospitalId, result.patientId, result.status);
+      const res = await this.processResult(result.hospitalId, patientId, result.status);
       processed.push({ hospitalId: result.hospitalId, ...res });
 
       // 수락된 게 있으면 나머지는 자동 거절 처리됨
