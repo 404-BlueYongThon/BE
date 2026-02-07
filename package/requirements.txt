@@ -4,3 +4,6 @@ twilio
 python-dotenv
 httpx
 python-multipart
+google-genai>=1.28.0
+numpy>=2.0.0
+samplerate==0.2.2
