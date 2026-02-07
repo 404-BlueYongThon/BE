@@ -1,13 +1,15 @@
-import { Injectable } from '@nestjs/common';
-// import { PrismaService } from './prisma.service';
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { prisma } from './prisma';
 import { EmergencySseService } from './emergency-sse.service';
 
 @Injectable()
 export class AppService {
+  private readonly logger = new Logger(AppService.name);
+
   constructor(
-    // private readonly prisma: PrismaService,
     private readonly sseService: EmergencySseService,
+    private readonly configService: ConfigService,
   ) {}
 
   // 1. 환자가 매칭 요청을 보낼 때 호출
@@ -36,18 +38,77 @@ export class AppService {
 
     const patientId = patient.id;
     const patientChannel = `patient-${patientId}`;
-    console.log(patientChannel);
+    this.logger.log(`환자 생성 완료: ${patientChannel}`);
 
-    // 백그라운드에서 비동기로 확산 로직 실행 (await 없이)
-    // Promise를 시작하고 에러 핸들링만 추가
-    this.escalateMatching(patientId, grade, lat, lng, 1).catch((err) => {
-      console.error('매칭 에스컬레이션 오류:', err);
-      this.sseService.emit(patientChannel, {
-        message: '매칭 중 오류가 발생했습니다.',
-        error: err.message,
+    // 근처 병원 조회 (거리순, 5개)
+    const hospitals: any[] = await prisma.$queryRaw`
+      SELECT id, name, number, latitude, longitude,
+      ST_Distance_Sphere(point(longitude, latitude), point(${lng}, ${lat})) AS distance
+      FROM hospital
+      WHERE min_grade <= ${grade} AND max_grade >= ${grade}
+      ORDER BY distance ASC
+      LIMIT 5
+    `;
+
+    if (hospitals.length === 0) {
+      return {
+        success: false,
+        message: '매칭 가능한 병원이 없습니다.',
+        patientId,
+        channel: patientChannel,
+      };
+    }
+
+    // 각 병원에 대해 HospitalRequest 레코드 생성
+    for (const hospital of hospitals) {
+      await prisma.hospitalRequest.create({
+        data: {
+          patientId,
+          hospitalId: hospital.id,
+          accepted: null,
+          createdAt: new Date(),
+        },
       });
-    });
-    console.log('매칭 확산 로직 시작됨');
+    }
+
+    // AI 서버(localhost:8000)로 병원 + 환자 정보 전송
+    const aiServerUrl = this.configService.get<string>('AI_SERVER_URL') || 'http://localhost:8000';
+    const callbackBaseUrl = this.configService.get<string>('CALLBACK_BASE_URL') || 'http://localhost:3000';
+
+    const payload = {
+      hospitals: hospitals.map((h) => ({
+        id: h.id,
+        phone: h.number,
+      })),
+      patientId,
+      age,
+      sex,
+      category,
+      symptom,
+      remarks,
+      grade,
+      callback_url: `${callbackBaseUrl}/emergency/callback`,
+    };
+
+    this.logger.log(`AI 서버로 매칭 요청 전송: ${aiServerUrl}`);
+
+    // 비동기로 AI 서버에 전송 (응답 대기하지 않음)
+    fetch(aiServerUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+      .then(async (res) => {
+        const body = await res.json();
+        this.logger.log(`AI 서버 응답: ${res.status} ${JSON.stringify(body)}`);
+      })
+      .catch((err) => {
+        this.logger.error(`AI 서버 요청 실패: ${err.message}`);
+        this.sseService.emit(patientChannel, {
+          message: 'AI 서버 연결에 실패했습니다.',
+          status: 'AI_SERVER_ERROR',
+        });
+      });
 
     return {
       success: true,
@@ -57,109 +118,80 @@ export class AppService {
     };
   }
 
-  // 2. 단계적으로 범위를 넓히며 병원들에게 요청을 보내는 핵심 로직
-  private async escalateMatching(
-    patientId: number,
-    grade: number,
-    lat: number,
-    lng: number,
-    page: number,
-  ) {
-    const limit = 5;
-    const offset = (page - 1) * limit;
+  // 2. AI 서버에서 병원의 수락/거절 결과를 콜백할 때 호출
+  async acceptRequest(hospitalId: number, patientId: number, status: string) {
     const patientChannel = `patient-${patientId}`;
+    const accepted = status === 'accepted';
 
-    // 이미 수락된 요청이 있는지 확인 (있으면 중단)
-    const existingRequest = await prisma.hospitalRequest.findFirst({
-      where: { patientId, accepted: true },
+    // 해당 요청의 상태 업데이트
+    const request = await prisma.hospitalRequest.updateMany({
+      where: { hospitalId, patientId, accepted: null },
+      data: { accepted },
     });
-    if (existingRequest) return;
 
-    // 현재 페이지(5개)의 가장 가까운 병원 조회
-    const hospitals: any[] = await prisma.$queryRaw`
-      SELECT id, name, number, latitude, longitude,
-      ST_Distance_Sphere(point(longitude, latitude), point(${lng}, ${lat})) AS distance
-      FROM hospital
-      WHERE min_grade <= ${grade} AND max_grade >= ${grade}
-      ORDER BY distance ASC
-      LIMIT ${limit} OFFSET ${offset}
-    `;
+    if (request.count === 0) {
+      return {
+        success: false,
+        message: '이미 처리되었거나 존재하지 않는 요청입니다.',
+      };
+    }
 
-    if (hospitals.length === 0) {
+    const hospital = await prisma.hospital.findUnique({
+      where: { id: hospitalId },
+    });
+
+    if (!hospital) {
+      return { success: false, message: '병원을 찾을 수 없습니다.' };
+    }
+
+    if (accepted) {
+      // 나머지 대기 중인 요청을 모두 거절로 변경
+      await prisma.hospitalRequest.updateMany({
+        where: { patientId, accepted: null },
+        data: { accepted: false },
+      });
+
+      // 수락 → SSE로 응급대원에게 알림 후 연결 종료
       this.sseService.emit(patientChannel, {
-        message: '더 이상 매칭 가능한 병원이 없습니다.',
+        message: `${hospital.name} 병원이 수용을 수락했습니다!`,
+        hospitalId: hospital.id,
+        hospitalName: hospital.name,
+        hospitalNumber: hospital.number,
+        status: 'accepted',
       });
-      return;
-    }
+      this.logger.log(`병원 ${hospital.name}(${hospitalId})이 환자 ${patientId} 수용 수락`);
 
-    this.sseService.emit(patientChannel, {
-      message: `${page}차 매칭 시도 중: 주변 ${hospitals.length}개의 병원에 요청을 보냈습니다.`,
-      hospitals,
-    });
+      // SSE 연결 종료
+      this.sseService.unsubscribe(patientChannel);
 
-    // 각 병원에게 요청 생성 및 알림 (실제로는 병원용 SSE 채널로 전송)
-    for (const hospital of hospitals) {
-      await prisma.hospitalRequest.create({
-        data: {
-          patientId,
-          hospitalId: hospital.id,
-          accepted: null, // 대기 상태
-          createdAt: new Date(),
-        },
+      return { success: true, status: 'accepted' };
+    } else {
+      // 거절 → SSE로 응급대원에게 알림
+      this.sseService.emit(patientChannel, {
+        message: `${hospital.name} 병원이 수용을 거절했습니다.`,
+        hospitalId: hospital.id,
+        hospitalName: hospital.name,
+        status: 'rejected',
       });
-      // 병원에게 알림 (병원용 channel: hospital-{id})
-      this.sseService.emit(`hospital-${hospital.id}`, {
-        message: '새로운 응급 환자 수용 요청이 왔습니다!',
-        patientId,
-        grade,
-      });
-    }
+      this.logger.log(`병원 ${hospital.name}(${hospitalId})이 환자 ${patientId} 수용 거절`);
 
-    // 60초 대기 후, 아무도 수락하지 않았으면 다음 페이지로 확산
-    setTimeout(async () => {
-      const accepted = await prisma.hospitalRequest.findFirst({
+      // 모든 병원이 거절했는지 확인
+      const pendingCount = await prisma.hospitalRequest.count({
+        where: { patientId, accepted: null },
+      });
+      const acceptedCount = await prisma.hospitalRequest.count({
         where: { patientId, accepted: true },
       });
 
-      if (!accepted) {
+      if (pendingCount === 0 && acceptedCount === 0) {
         this.sseService.emit(patientChannel, {
-          message: '응답이 없어 검색 범위를 넓힙니다...',
+          message: '모든 병원이 거절했습니다. 추가 조치가 필요합니다.',
+          status: 'all_rejected',
         });
-        this.escalateMatching(patientId, grade, lat, lng, page + 1);
-      }
-    }, 60000); // 60초
-  }
-
-  // 3. 병원이 수락을 눌렀을 때 호출
-  async acceptRequest(hospitalId: number, patientId: number) {
-    // 해당 요청을 수락 상태로 변경
-    const request = await prisma.hospitalRequest.updateMany({
-      where: { hospitalId, patientId, accepted: null },
-      data: { accepted: true },
-    });
-
-    if (request.count > 0) {
-      const hospital = await prisma.hospital.findUnique({
-        where: { id: hospitalId },
-      });
-
-      if (!hospital) {
-        return { success: false, message: '병원을 찾을 수 없습니다.' };
       }
 
-      // 환자에게 수락 알림 전송
-      this.sseService.emit(`patient-${patientId}`, {
-        message: '병원이 수용을 수락했습니다!',
-        hospitalName: hospital.name,
-        hospitalNumber: hospital.number,
-        status: 'ACCEPTED',
-      });
-      return { success: true };
+      return { success: true, status: 'rejected' };
     }
-    return {
-      success: false,
-      message: '이미 처리되었거나 존재하지 않는 요청입니다.',
-    };
   }
 
   getHello(): string {

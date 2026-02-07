@@ -34,21 +34,21 @@ export class AppController {
   @ApiTags('SSE')
   @ApiOperation({
     summary: 'SSE 실시간 알림 연결',
-    description: '환자 또는 병원이 실시간 알림을 받기 위한 SSE 연결. /sse/patient-1 또는 /sse/hospital-5 형태로 사용',
+    description: '응급대원이 매칭 결과(수락/거절)를 실시간으로 받기 위한 SSE 연결. /sse/patient-{patientId} 형태로 사용. matching/start 응답의 channel 값을 사용합니다.',
   })
-  @ApiParam({ name: 'id', description: '클라이언트 식별자 (예: patient-1, hospital-5)', example: 'patient-1' })
+  @ApiParam({ name: 'id', description: '채널 식별자 (matching/start 응답의 channel 값)', example: 'patient-1' })
   sse(@Param('id') id: string): Observable<MessageEvent> {
     return this.sseService.subscribe(id);
   }
 
-  // 2. 매칭 시작 요청 (환자가 호출)
-  @Sse('matching/start')
+  // 2. 매칭 시작 요청 (응급대원이 호출)
+  @Post('matching/start')
   @ApiTags('매칭')
   @ApiOperation({
     summary: '매칭 시작 요청',
-    description: '환자가 응급 매칭을 요청합니다. 가까운 병원부터 단계적으로 매칭을 시도합니다.',
+    description: '응급대원이 환자 정보와 위치를 전송하면 근처 병원 5개를 조회하여 AI 서버(localhost:8000)로 전달합니다. 응답의 channel 값으로 SSE 연결하여 결과를 수신하세요.',
   })
-  @ApiResponse({ status: 200, description: '매칭 프로세스가 시작되고 SSE 스트림을 통해 결과 수신' })
+  @ApiResponse({ status: 200, description: 'patientId와 SSE channel 반환. 이후 /sse/{channel}로 SSE 연결 필요' })
   async startMatching(@Body() dto: StartMatchingDto) {
     const result = await this.appService.startMatching(
       dto.age,
@@ -64,15 +64,15 @@ export class AppController {
     return result;
   }
 
-  // 3. 수용 수락 (병원이 호출)
-  @Post('matching/accept')
+  // 3. 수락/거절 콜백 (AI 서버가 호출)
+  @Post('emergency/callback')
   @ApiTags('매칭')
   @ApiOperation({
-    summary: '수용 수락',
-    description: '병원이 응급 환자 수용 요청을 수락합니다.',
+    summary: '수락/거절 콜백',
+    description: 'AI 서버(localhost:8000)에서 병원의 수락/거절 결과를 콜백합니다. SSE로 응급대원에게 결과를 전달합니다.',
   })
-  @ApiResponse({ status: 200, description: '수락 처리 결과 반환' })
+  @ApiResponse({ status: 200, description: '수락/거절 처리 결과 반환' })
   async acceptRequest(@Body() dto: AcceptRequestDto) {
-    return this.appService.acceptRequest(dto.hospitalId, dto.patientId);
+    return this.appService.acceptRequest(dto.hospitalId, dto.patientId, dto.status);
   }
 }
