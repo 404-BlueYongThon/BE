@@ -72,8 +72,12 @@ export class AppService {
     }
 
     // AI 서버(localhost:8000)로 병원 + 환자 정보 전송
-    const aiServerUrl = this.configService.get<string>('AI_SERVER_URL') || 'http://localhost:8000/broadcast';
-    const callbackBaseUrl = this.configService.get<string>('CALLBACK_BASE_URL') || 'http://localhost:3000';
+    const aiServerUrl =
+      this.configService.get<string>('AI_SERVER_URL') ||
+      'http://localhost:8000/broadcast';
+    const callbackBaseUrl =
+      this.configService.get<string>('CALLBACK_BASE_URL') ||
+      'http://localhost:3000';
 
     const payload = {
       hospitals: hospitals.map((h) => ({
@@ -119,8 +123,13 @@ export class AppService {
   }
 
   // 2. AI 서버에서 병원들의 수락/거절 결과를 한꺼번에 콜백할 때 호출
-  async handleCallback(patientId: number, results: { hospitalId: number; status: string }[]) {
-    this.logger.log(`[handleCallback] 환자 ${patientId} - ${results.length}개 병원 결과 수신`);
+  async handleCallback(
+    patientId: number,
+    results: { hospitalId: number; status: string }[],
+  ) {
+    this.logger.log(
+      `[handleCallback] 환자 ${patientId} - ${results.length}개 병원 결과 수신`,
+    );
     this.logger.log(`[handleCallback] 결과 상세: ${JSON.stringify(results)}`);
     const processed: any[] = [];
 
@@ -130,12 +139,22 @@ export class AppService {
       if (b.status === 'accepted') return 1;
       return 0;
     });
-    this.logger.log(`콜백 처리 시작: 환자 ${patientId}, 결과 ${JSON.stringify(sorted)}`);
+    this.logger.log(
+      `콜백 처리 시작: 환자 ${patientId}, 결과 ${JSON.stringify(sorted)}`,
+    );
     for (const result of sorted) {
-      this.logger.log(`[handleCallback] 병원 ${result.hospitalId} 처리 시작 (status: ${result.status})`);
-      const res = await this.processResult(result.hospitalId, patientId, result.status);
+      this.logger.log(
+        `[handleCallback] 병원 ${result.hospitalId} 처리 시작 (status: ${result.status})`,
+      );
+      const res = await this.processResult(
+        result.hospitalId,
+        patientId,
+        result.status,
+      );
       processed.push({ hospitalId: result.hospitalId, ...res });
-      this.logger.log(`[handleCallback] 병원 ${result.hospitalId} 처리 완료: ${JSON.stringify(res)}`);
+      this.logger.log(
+        `[handleCallback] 병원 ${result.hospitalId} 처리 완료: ${JSON.stringify(res)}`,
+      );
 
       // 수락된 게 있으면 나머지는 자동 거절 처리됨
       if (result.status === 'accepted') {
@@ -144,31 +163,60 @@ export class AppService {
       }
     }
 
-    this.logger.log(`[handleCallback] 환자 ${patientId} 모든 병원 처리 완료: ${JSON.stringify(processed)}`);
+    this.logger.log(
+      `[handleCallback] 환자 ${patientId} 모든 병원 처리 완료: ${JSON.stringify(processed)}`,
+    );
     return { success: true, processed };
   }
 
   // 개별 병원 결과 처리
-  private async processResult(hospitalId: number, patientId: number, status: string) {
+  private async processResult(
+    hospitalId: number,
+    patientId: number,
+    status: string,
+  ) {
     const patientChannel = `patient-${patientId}`;
-    this.logger.debug(`[processResult] 병원 ${hospitalId}, 환자 ${patientId}, 상태: ${status}`);
+    this.logger.debug(
+      `[processResult] 병원 ${hospitalId}, 환자 ${patientId}, 상태: ${status}`,
+    );
 
     if (status === 'no_answer' || status === 'calling') {
-      // 무응답 → 거절과 동일 처리
-      // await prisma.hospitalRequest.updateMany({
-      //   where: { hospitalId, patientId, accepted: null },
-      //   data: { accepted: false },
-      // });
+      // 무응답 → 거절과 동일하게 DB 반영 (pending 잔존 방지)
+      await prisma.hospitalRequest.updateMany({
+        where: { hospitalId, patientId, accepted: null },
+        data: { accepted: false },
+      });
 
-      // const hospital = await prisma.hospital.findUnique({ where: { id: hospitalId } });
-      // if (hospital) {
-      //   this.sseService.emit(patientChannel, {
-      //     message: `${hospital.name} 병원이 응답하지 않았습니다.`,
-      //     hospitalId: hospital.id,
-      //     hospitalName: hospital.name,
-      //     status: 'no_answer',
-      //   });
-      // }
+      const hospital = await prisma.hospital.findUnique({
+        where: { id: hospitalId },
+      });
+      if (hospital) {
+        this.sseService.emit(patientChannel, {
+          message: `${hospital.name} 병원이 응답하지 않았습니다.`,
+          hospitalId: hospital.id,
+          hospitalName: hospital.name,
+          status: 'no_answer',
+        });
+      }
+
+      // 모든 병원이 거절/무응답인지 확인
+      const pendingCount = await prisma.hospitalRequest.count({
+        where: { patientId, accepted: null },
+      });
+      const acceptedCount = await prisma.hospitalRequest.count({
+        where: { patientId, accepted: true },
+      });
+
+      if (pendingCount === 0 && acceptedCount === 0) {
+        this.sseService.emit(patientChannel, {
+          message: '모든 병원이 거절했습니다. 추가 조치가 필요합니다.',
+          status: 'all_rejected',
+        });
+        this.logger.log(
+          `[processResult] 환자 ${patientId} - 모든 병원 거절/무응답 완료`,
+        );
+      }
+
       return { status: 'no_answer' };
     }
 
@@ -179,10 +227,14 @@ export class AppService {
       where: { hospitalId, patientId, accepted: null },
       data: { accepted },
     });
-    this.logger.log(`[processResult] 병원 ${hospitalId}, 환자 ${patientId} (${accepted ? '수락' : '거절'}): ${request.count}개 레코드 업데이트`);
+    this.logger.log(
+      `[processResult] 병원 ${hospitalId}, 환자 ${patientId} (${accepted ? '수락' : '거절'}): ${request.count}개 레코드 업데이트`,
+    );
 
     if (request.count === 0) {
-      this.logger.warn(`[processResult] 병원 ${hospitalId} - 이미 처리됨 또는 레코드 없음`);
+      this.logger.warn(
+        `[processResult] 병원 ${hospitalId} - 이미 처리됨 또는 레코드 없음`,
+      );
       return { status: 'already_processed' };
     }
 
@@ -201,7 +253,9 @@ export class AppService {
         where: { patientId, accepted: null },
         data: { accepted: false },
       });
-      this.logger.log(`[processResult] 수락 - 병원 ${hospitalId}: ${rejectRes.count}개 나머지 병원 자동 거절`);
+      this.logger.log(
+        `[processResult] 수락 - 병원 ${hospitalId}: ${rejectRes.count}개 나머지 병원 자동 거절`,
+      );
 
       // 수락 → SSE로 응급대원에게 알림 후 연결 종료
       this.sseService.emit(patientChannel, {
@@ -211,7 +265,9 @@ export class AppService {
         hospitalNumber: hospital.number,
         status: 'accepted',
       });
-      this.logger.log(`병원 ${hospital.name}(${hospitalId})이 환자 ${patientId} 수용 수락`);
+      this.logger.log(
+        `병원 ${hospital.name}(${hospitalId})이 환자 ${patientId} 수용 수락`,
+      );
 
       this.sseService.unsubscribe(patientChannel);
       return { status: 'accepted', count: request.count };
@@ -223,7 +279,9 @@ export class AppService {
         hospitalName: hospital.name,
         status: 'rejected',
       });
-      this.logger.log(`병원 ${hospital.name}(${hospitalId})이 환자 ${patientId} 수용 거절`);
+      this.logger.log(
+        `병원 ${hospital.name}(${hospitalId})이 환자 ${patientId} 수용 거절`,
+      );
 
       // 모든 병원이 거절했는지 확인
       const pendingCount = await prisma.hospitalRequest.count({
@@ -236,14 +294,18 @@ export class AppService {
         where: { patientId, accepted: false },
       });
 
-      this.logger.log(`[processResult] 환자 ${patientId} 상태 - 대기중: ${pendingCount}, 수락: ${acceptedCount}, 거절: ${rejectedCount}`);
+      this.logger.log(
+        `[processResult] 환자 ${patientId} 상태 - 대기중: ${pendingCount}, 수락: ${acceptedCount}, 거절: ${rejectedCount}`,
+      );
 
       if (pendingCount === 0 && acceptedCount === 0) {
         this.sseService.emit(patientChannel, {
           message: '모든 병원이 거절했습니다. 추가 조치가 필요합니다.',
           status: 'all_rejected',
         });
-        this.logger.log(`[processResult] 환자 ${patientId} - 모든 병원 거절 완료`);
+        this.logger.log(
+          `[processResult] 환자 ${patientId} - 모든 병원 거절 완료`,
+        );
       }
 
       return { status: 'rejected', count: request.count };
