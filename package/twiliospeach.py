@@ -65,6 +65,21 @@ async def send_batch_result(emergency_id: str):
         except Exception as e:
             print(f"❌ [보고 실패] {e}")
 
+async def auto_finalize_batch(emergency_id: str, timeout_seconds: int = 90):
+    """안전장치: 타임아웃 후에도 calling 상태인 병원을 no_answer 처리 후 최종 보고"""
+    await asyncio.sleep(timeout_seconds)
+
+    batch = emergency_batches.get(emergency_id)
+    if not batch or batch["is_finalized"]:
+        return
+
+    for h_id, status in batch["results"].items():
+        if status == "calling":
+            batch["results"][h_id] = "no_answer"
+            print(f"⏰ [타임아웃] 병원 {h_id}: calling → no_answer")
+
+    await send_batch_result(emergency_id)
+
 # --- 2. [엔드포인트] 방송 시작 ---
 @app.post("/broadcast")
 async def start_broadcast(req: EmergencyRequest):
@@ -93,6 +108,7 @@ async def start_broadcast(req: EmergencyRequest):
             emergency_batches[emergency_id]["results"][hospital.hospitalId] = "failed"
             print(f"❌ ID {hospital.hospitalId} 발신 실패: {e}")
 
+    asyncio.create_task(auto_finalize_batch(emergency_id))
     return {"status": "processing", "emergency_id": emergency_id}
 
 # --- 3. [TwiML] 전화 응답 ---
@@ -148,8 +164,7 @@ async def handle_gather(emergency_id: str, hospital_id: int, Digits: str = Form(
         
         # 모든 병원이 응답을 마쳤는지 확인 (모두 거절된 경우 보고)
         if all(status in ["rejected", "failed", "no_answer"] for status in batch["results"].values()):
-            if not any(status == "calling" for status in batch["results"].values()):
-                 asyncio.create_task(send_batch_result(emergency_id))
+            asyncio.create_task(send_batch_result(emergency_id))
 
     response.hangup()
     return Response(content=response.to_xml(), media_type="application/xml")
