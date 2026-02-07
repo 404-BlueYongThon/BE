@@ -194,6 +194,21 @@ export class AppService {
       `[processResult] 병원 ${hospitalId}, 환자 ${patientId}, 상태: ${status}`,
     );
 
+    if (status === 'ringing' || status === 'in-progress') {
+      const hospital = await prisma.hospital.findUnique({
+        where: { id: hospitalId },
+      });
+      if (hospital) {
+        this.sseService.emit(patientChannel, {
+          hospitalId: hospital.id,
+          hospitalName: hospital.name,
+          hospitalNumber: hospital.number,
+          status,
+        });
+      }
+      return { status };
+    }
+
     if (status === 'no_answer' || status === 'calling') {
       // 무응답 → 거절과 동일하게 DB 반영 (pending 잔존 방지)
       await prisma.hospitalRequest.updateMany({

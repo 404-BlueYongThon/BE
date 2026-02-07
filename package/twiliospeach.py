@@ -112,11 +112,15 @@ async def start_broadcast(req: EmergencyRequest):
     for hospital in req.hospitals:
         try:
             target_url = f"{BASE_URL}/voice?emergency_id={emergency_id}&hospital_id={hospital.hospitalId}"
+            status_cb = f"{BASE_URL}/call-status?emergency_id={emergency_id}&hospital_id={hospital.hospitalId}"
             call = twilio_client.calls.create(
                 to=hospital.phone,
                 from_=TWILIO_NUMBER,
                 url=target_url,
-                method="POST"
+                method="POST",
+                status_callback=status_cb,
+                status_callback_event=["ringing", "answered", "completed"],
+                status_callback_method="POST",
             )
             active_calls[call.sid] = {"hospital_id": hospital.hospitalId, "emergency_id": emergency_id}
         except Exception as e:
@@ -151,6 +155,26 @@ async def voice_response(emergency_id: str, hospital_id: int):
     )
     gather.say(script, language='ko-KR', voice='Polly.Seoyeon')
     return Response(content=response.to_xml(), media_type="application/xml")
+
+# --- 3.5 [엔드포인트] Twilio 통화 상태 콜백 ---
+@app.post("/call-status")
+async def call_status(emergency_id: str, hospital_id: int, CallStatus: str = Form(...)):
+    status_map = {
+        "ringing": "ringing",
+        "in-progress": "in-progress",
+        "busy": "no_answer",
+        "no-answer": "no_answer",
+        "failed": "no_answer",
+    }
+    mapped = status_map.get(CallStatus)
+    if mapped and not emergency_batches.get(emergency_id, {}).get("is_finalized"):
+        print(f"📱 [통화상태] 병원 {hospital_id}: {CallStatus}")
+        if mapped in ("no_answer",):
+            batch = emergency_batches.get(emergency_id)
+            if batch and batch["results"].get(hospital_id) == "calling":
+                batch["results"][hospital_id] = "no_answer"
+        asyncio.create_task(send_single_result(emergency_id, hospital_id, mapped))
+    return {"status": "ok"}
 
 # --- 4. [엔드포인트] 키패드 입력 처리 ---
 @app.post("/handle-gather")
