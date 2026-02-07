@@ -13,22 +13,25 @@ generator client {
 }
 model Patient {
   id               Int                @id @default(autoincrement())
-  age              String?            @db.VarChar(20)
-  category         String?            @db.VarChar(20)
-  symptom          String?            @db.VarChar(20)
-  remarks          String?            @db.VarChar(50)
-  grade            Int?
-  createdAt        DateTime?          @map("created_at") @db.DateTime(6)
+  age              String             @db.VarChar(20)
+  category         String             @db.VarChar(20)
+  symptom          String             @db.VarChar(20)
+  remarks          String             @db.VarChar(50)
+  grade            Int
+  createdAt        DateTime           @map("created_at") @db.DateTime(6)
   hospitalRequests HospitalRequest[]
   @@map("patient")
 }
 model Hospital {
   id               Int                @id @default(autoincrement())
-  name             String?            @db.VarChar(30)
-  maxGrade         Int?               @map("max_grade")
-  minGrade         Int?               @map("min_grade")
-  createdAt        DateTime?          @map("created_at") @db.DateTime(6)
-  updatedAt        DateTime?          @map("updated_at") @db.DateTime(6)
+  name             String             @db.VarChar(30)
+  maxGrade         Int                @map("max_grade")
+  minGrade         Int                @map("min_grade")
+  number           String             @db.VarChar(30)
+  latitude         Decimal            @db.Decimal(10, 8)
+  longitude        Decimal            @db.Decimal(11, 8)
+  createdAt        DateTime           @map("created_at") @db.DateTime(6)
+  updatedAt        DateTime           @map("updated_at") @db.DateTime(6)
   hospitalRequests HospitalRequest[]
   @@map("hospital")
 }
@@ -37,7 +40,7 @@ model HospitalRequest {
   patientId  Int       @map("patient_id")
   hospitalId Int       @map("hospital_id")
   accepted   Boolean?
-  createdAt  DateTime? @map("created_at") @db.DateTime(6)
+  createdAt  DateTime  @map("created_at") @db.DateTime(6)
   // 관계 설정
   patient  Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
   hospital Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
