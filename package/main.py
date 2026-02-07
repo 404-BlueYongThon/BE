@@ -22,7 +22,7 @@ import uuid
 
 import httpx
 import numpy as np
-import samplerate
+## samplerate removed — numpy interp used instead (no C compiler needed)
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, Response, WebSocket
@@ -242,26 +242,37 @@ async def voice_twiml(emergency_id: str, hospital_id: int):
 
 
 # --- Audio conversion utilities ---
-def mulaw_to_pcm_16k(chunk_ulaw: bytes, resampler) -> bytes:
+def _resample_numpy(arr_float: np.ndarray, ratio: float) -> np.ndarray:
+    """Resample using numpy linear interpolation (no C library needed)."""
+    n_in = len(arr_float)
+    if n_in == 0:
+        return arr_float
+    n_out = int(n_in * ratio)
+    if n_out == 0:
+        return np.array([], dtype=np.float32)
+    x_old = np.linspace(0, 1, n_in)
+    x_new = np.linspace(0, 1, n_out)
+    return np.interp(x_new, x_old, arr_float).astype(np.float32)
+
+
+def mulaw_to_pcm_16k(chunk_ulaw: bytes) -> bytes:
     """Convert mulaw 8kHz to PCM 16-bit 16kHz."""
     # mulaw -> PCM 16-bit 8kHz
     pcm_8k = audioop.ulaw2lin(chunk_ulaw, 2)
     # Resample 8kHz -> 16kHz
     arr_8k = np.frombuffer(pcm_8k, dtype=np.int16)
     arr_float = arr_8k.astype(np.float32) / 32768.0
-    arr_16k = resampler.process(arr_float, ratio=2.0, end_of_input=False)
+    arr_16k = _resample_numpy(arr_float, ratio=2.0)
     result = (arr_16k * 32767).astype(np.int16)
     return result.tobytes()
 
 
-def pcm_24k_to_mulaw(chunk_pcm: bytes, resampler) -> bytes:
+def pcm_24k_to_mulaw(chunk_pcm: bytes) -> bytes:
     """Convert PCM 16-bit 24kHz to mulaw 8kHz."""
     # Resample 24kHz -> 8kHz
     arr_24k = np.frombuffer(chunk_pcm, dtype=np.int16)
     arr_float = arr_24k.astype(np.float32) / 32768.0
-    arr_8k = resampler.process(
-        arr_float, ratio=(8000 / 24000), end_of_input=False
-    )
+    arr_8k = _resample_numpy(arr_float, ratio=(8000.0 / 24000.0))
     pcm_8k = (arr_8k * 32767).astype(np.int16).tobytes()
     # PCM -> mulaw
     return audioop.lin2ulaw(pcm_8k, 2)
@@ -271,7 +282,6 @@ def pcm_24k_to_mulaw(chunk_pcm: bytes, resampler) -> bytes:
 async def handle_twilio_to_gemini(
     websocket: WebSocket,
     audio_in_q: asyncio.Queue,
-    resampler,
     call_state: dict,
 ):
     """Task 1: Receive Twilio audio, convert mulaw→PCM, push to queue."""
@@ -293,7 +303,7 @@ async def handle_twilio_to_gemini(
                 if not call_state.get("active"):
                     continue
                 chunk_ulaw = base64.b64decode(msg["media"]["payload"])
-                pcm_16k = mulaw_to_pcm_16k(chunk_ulaw, resampler)
+                pcm_16k = mulaw_to_pcm_16k(chunk_ulaw)
                 await audio_in_q.put(pcm_16k)
 
             elif msg["event"] == "stop":
@@ -309,7 +319,6 @@ async def handle_twilio_to_gemini(
 async def handle_gemini_to_twilio(
     websocket: WebSocket,
     audio_out_q: asyncio.Queue,
-    resampler,
     call_state: dict,
 ):
     """Task 2: Receive Gemini audio from queue, convert PCM→mulaw, send to Twilio."""
@@ -317,7 +326,7 @@ async def handle_gemini_to_twilio(
         try:
             chunk_pcm = await asyncio.wait_for(audio_out_q.get(), timeout=1.0)
             if chunk_pcm and call_state.get("active"):
-                mulaw_data = pcm_24k_to_mulaw(chunk_pcm, resampler)
+                mulaw_data = pcm_24k_to_mulaw(chunk_pcm)
                 payload = base64.b64encode(mulaw_data).decode("utf-8")
                 sid = call_state.get("stream_sid")
                 if sid:
@@ -500,15 +509,13 @@ async def websocket_media_stream(websocket: WebSocket):
     call_state = {"active": False, "stream_sid": None}
     audio_in_q: asyncio.Queue = asyncio.Queue()
     audio_out_q: asyncio.Queue = asyncio.Queue()
-    resampler_in = samplerate.Resampler("sinc_fastest", channels=1)
-    resampler_out = samplerate.Resampler("sinc_fastest", channels=1)
 
     tasks = [
         asyncio.create_task(
-            handle_twilio_to_gemini(websocket, audio_in_q, resampler_in, call_state)
+            handle_twilio_to_gemini(websocket, audio_in_q, call_state)
         ),
         asyncio.create_task(
-            handle_gemini_to_twilio(websocket, audio_out_q, resampler_out, call_state)
+            handle_gemini_to_twilio(websocket, audio_out_q, call_state)
         ),
         asyncio.create_task(
             conversation_loop(audio_in_q, audio_out_q, call_state)
