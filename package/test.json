@@ -1,0 +1,10 @@
+curl -X POST "http://localhost:8000/broadcast" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "hospitals": [{"name": "내폰테스트", "phone": "+8210XXXXXXXX"}],
+       "age": 25,
+       "gender": "남성",
+       "symptoms": "호흡 곤란 및 흉통",
+       "severity": "응급",
+       "eta": "7분"
+     }'
