@@ -73,7 +73,7 @@ async def start_broadcast(req: EmergencyRequest):
     # 배치 초기화 (모든 병원의 초기 상태는 'calling')
     emergency_batches[emergency_id] = {
         "data": req.dict(),
-        "results": {h.id: "no_answer" for h in req.hospitals},
+        "results": {h.hospitalId: "no_answer" for h in req.hospitals},
         "is_finalized": False
     }
 
@@ -81,17 +81,17 @@ async def start_broadcast(req: EmergencyRequest):
 
     for hospital in req.hospitals:
         try:
-            target_url = f"{BASE_URL}/voice?emergency_id={emergency_id}&hospital_id={hospital.id}"
+            target_url = f"{BASE_URL}/voice?emergency_id={emergency_id}&hospital_id={hospital.hospitalId}"
             call = twilio_client.calls.create(
                 to=hospital.phone,
                 from_=TWILIO_NUMBER,
                 url=target_url,
                 method="POST"
             )
-            active_calls[call.sid] = {"hospital_id": hospital.id, "emergency_id": emergency_id}
+            active_calls[call.sid] = {"hospital_id": hospital.hospitalId, "emergency_id": emergency_id}
         except Exception as e:
-            emergency_batches[emergency_id]["results"][hospital.id] = "failed"
-            print(f"❌ ID {hospital.id} 발신 실패: {e}")
+            emergency_batches[emergency_id]["results"][hospital.hospitalId] = "failed"
+            print(f"❌ ID {hospital.hospitalId} 발신 실패: {e}")
 
     return {"status": "processing", "emergency_id": emergency_id}
 
