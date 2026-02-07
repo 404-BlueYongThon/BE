@@ -27,11 +27,12 @@ emergency_batches = {}
 active_calls = {}
 
 class Hospital(BaseModel):
-    id: int
+    hospitalId: int
     phone: str
 
 class EmergencyRequest(BaseModel):
     hospitals: list[Hospital]
+    patientId: int
     age: str
     sex: str
     category: str
@@ -50,8 +51,9 @@ async def send_batch_result(emergency_id: str):
     batch["is_finalized"] = True
     payload = {
         "emergency_id": emergency_id,
+        "patientId": batch["data"]["patientId"],
         "results": [
-            {"id": h_id, "status": status} 
+            {"hospitalId": h_id, "status": status} 
             for h_id, status in batch["results"].items()
         ]
     }
