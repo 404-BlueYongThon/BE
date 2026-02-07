@@ -19,7 +19,6 @@ AI 음성 전화를 통해 여러 병원에 동시 연락하고 실시간으로 
 | **Framework** | NestJS | 11.0.0 |
 | **Language** | TypeScript | 5.0+ |
 | **AI & Voice** | Python FastAPI | 3.10+ |
-| **Algorithm** | Nest.js | 11.0.0 |
 | **Database** | MySQL (Prisma) | 8.4 |
 | **Voice API** | Twilio | - |
 | **Speech** | Google Cloud TTS/STT | - |
@@ -95,9 +94,6 @@ cp .env.example .env
 # 4. Database setup
 npx prisma migrate dev
 npx prisma generate
-
-# 5. Run with Docker
-docker-compose up
 ```
 
 ### Environment Variables
