@@ -31,7 +31,7 @@ export class AppController {
   }
 
   // 2. 매칭 시작 요청 (환자가 호출)
-  @Post('matching/start')
+  @Sse('matching/start')
   async startMatching(
     @Body('age') age: string,
     @Body('category') category: string,
@@ -41,7 +41,7 @@ export class AppController {
     @Body('lat') lat: number,
     @Body('lng') lng: number,
   ) {
-    return this.appService.startMatching(
+    const result = await this.appService.startMatching(
       age,
       category,
       symptom,
@@ -50,6 +50,8 @@ export class AppController {
       lat,
       lng,
     );
+    console.log('startMatching result:', result);
+    return result;
   }
 
   // 3. 수용 수락 (병원이 호출)

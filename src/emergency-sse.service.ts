@@ -8,9 +8,20 @@ export class EmergencySseService {
 
   // 클라이언트가 SSE 연결을 맺을 때 호출
   subscribe(id: string): Observable<MessageEvent> {
-    const subject = new Subject<MessageEvent>();
-    this.clients.set(id, subject);
-    return subject.asObservable();
+    return new Observable<MessageEvent>((subscriber) => {
+      const subject = new Subject<MessageEvent>();
+      this.clients.set(id, subject);
+
+      const subscription = subject.subscribe(subscriber);
+
+      // 연결 직후 이벤트 (Postman 등에서 연결 확인용)
+      subscriber.next({ data: { message: 'connected' } });
+
+      return () => {
+        subscription.unsubscribe();
+        this.clients.delete(id);
+      };
+    });
   }
 
   // 특정 클라이언트에게 이벤트 전송

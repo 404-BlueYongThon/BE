@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from './prisma.service';
+// import { PrismaService } from './prisma.service';
+import { prisma } from './prisma';
 import { EmergencySseService } from './emergency-sse.service';
 
 @Injectable()
 export class AppService {
   constructor(
-    private readonly prisma: PrismaService,
+    // private readonly prisma: PrismaService,
     private readonly sseService: EmergencySseService,
   ) {}
 
@@ -20,7 +21,7 @@ export class AppService {
     lng: number,
   ) {
     // DB에 환자 정보 생성
-    const patient = await this.prisma.patient.create({
+    const patient = await prisma.patient.create({
       data: {
         age,
         category,
@@ -33,20 +34,28 @@ export class AppService {
 
     const patientId = patient.id;
     const patientChannel = `patient-${patientId}`;
+    console.log(patientChannel);
 
-    this.sseService.emit(patientChannel, {
-      message: '환자 정보가 등록되었습니다. 매칭을 시작합니다.',
-      patientId,
+    // 백그라운드에서 비동기로 확산 로직 실행 (await 없이)
+    // Promise를 시작하고 에러 핸들링만 추가
+    this.escalateMatching(patientId, grade, lat, lng, 1).catch((err) => {
+      console.error('매칭 에스컬레이션 오류:', err);
+      this.sseService.emit(patientChannel, {
+        message: '매칭 중 오류가 발생했습니다.',
+        error: err.message,
+      });
     });
+    console.log('매칭 확산 로직 시작됨');
 
-    // 비동기로 확산 로직 실행
-    this.escalateMatching(patientId, grade, lat, lng, 1);
 
-    return {
-      success: true,
-      message: '매칭 프로세스가 시작되었습니다.',
-      patientId,
-    };
+    return this.sseService.subscribe(patientChannel);
+
+    // return {
+    //   success: true,
+    //   message: '매칭 프로세스가 시작되었습니다.',
+    //   patientId,
+    //   channel: patientChannel,
+    // };
   }
 
   // 2. 단계적으로 범위를 넓히며 병원들에게 요청을 보내는 핵심 로직
@@ -62,13 +71,13 @@ export class AppService {
     const patientChannel = `patient-${patientId}`;
 
     // 이미 수락된 요청이 있는지 확인 (있으면 중단)
-    const existingRequest = await this.prisma.hospitalRequest.findFirst({
+    const existingRequest = await prisma.hospitalRequest.findFirst({
       where: { patientId, accepted: true },
     });
     if (existingRequest) return;
 
     // 현재 페이지(5개)의 가장 가까운 병원 조회
-    const hospitals: any[] = await this.prisma.$queryRaw`
+    const hospitals: any[] = await prisma.$queryRaw`
       SELECT id, name, number, latitude, longitude,
       ST_Distance_Sphere(point(longitude, latitude), point(${lng}, ${lat})) AS distance
       FROM hospital
@@ -91,7 +100,7 @@ export class AppService {
 
     // 각 병원에게 요청 생성 및 알림 (실제로는 병원용 SSE 채널로 전송)
     for (const hospital of hospitals) {
-      await this.prisma.hospitalRequest.create({
+      await prisma.hospitalRequest.create({
         data: {
           patientId,
           hospitalId: hospital.id,
@@ -109,7 +118,7 @@ export class AppService {
 
     // 60초 대기 후, 아무도 수락하지 않았으면 다음 페이지로 확산
     setTimeout(async () => {
-      const accepted = await this.prisma.hospitalRequest.findFirst({
+      const accepted = await prisma.hospitalRequest.findFirst({
         where: { patientId, accepted: true },
       });
 
@@ -125,13 +134,13 @@ export class AppService {
   // 3. 병원이 수락을 눌렀을 때 호출
   async acceptRequest(hospitalId: number, patientId: number) {
     // 해당 요청을 수락 상태로 변경
-    const request = await this.prisma.hospitalRequest.updateMany({
+    const request = await prisma.hospitalRequest.updateMany({
       where: { hospitalId, patientId, accepted: null },
       data: { accepted: true },
     });
 
     if (request.count > 0) {
-      const hospital = await this.prisma.hospital.findUnique({
+      const hospital = await prisma.hospital.findUnique({
         where: { id: hospitalId },
       });
 
