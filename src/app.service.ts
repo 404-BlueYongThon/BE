@@ -13,6 +13,7 @@ export class AppService {
   // 1. 환자가 매칭 요청을 보낼 때 호출
   async startMatching(
     age: string,
+    sex: string,
     category: string,
     symptom: string,
     remarks: string,
@@ -24,6 +25,7 @@ export class AppService {
     const patient = await prisma.patient.create({
       data: {
         age,
+        sex,
         category,
         symptom,
         remarks,
@@ -47,15 +49,12 @@ export class AppService {
     });
     console.log('매칭 확산 로직 시작됨');
 
-
-    return this.sseService.subscribe(patientChannel);
-
-    // return {
-    //   success: true,
-    //   message: '매칭 프로세스가 시작되었습니다.',
-    //   patientId,
-    //   channel: patientChannel,
-    // };
+    return {
+      success: true,
+      message: '매칭 프로세스가 시작되었습니다.',
+      patientId,
+      channel: patientChannel,
+    };
   }
 
   // 2. 단계적으로 범위를 넓히며 병원들에게 요청을 보내는 핵심 로직
