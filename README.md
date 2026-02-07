@@ -1,65 +1,35 @@
 # 404 Found: Emergency AI Call System
 
-<div align="center">
-
 ![404 Found Banner](./assets/banner.png)
 
-**응급 환자를 위한 AI 병원 매칭 시스템**
-
-[![Vercel](https://img.shields.io/badge/Vercel-Deployed-success)](https://emergency-ai-call.log8.kr)
-[![AWS](https://img.shields.io/badge/AWS-Deploying-blue)](https://github.com/404-BlueYongThon/BE)
+[![Vercel](https://img.shields.io/badge/Frontend-Vercel-success)](https://emergency-ai-call.log8.kr)
+[![AWS](https://img.shields.io/badge/Backend-AWS-blue)](https://github.com/404-BlueYongThon/BE)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-[🌐 Live Demo](https://emergency-ai-call.log8.kr) | [📺 발표 자료](#) | [📖 문서](#)
+> 응급 환자를 위한 병원을, AI가 찾아드립니다
 
-</div>
-
----
-
-## 🚨 Problem
-
-### 응급 상황, 병원을 찾을 수 없다면?
-
-2026년, 대한민국의 응급실 포화율은 **평균 85%**입니다.  
-응급대원은 환자를 싣고 **평균 7개 병원**에 전화합니다.  
-매번 같은 증상을 설명하고, 거절당하고, 다시 전화하는 동안...  
-**골든타임은 계속 흘러갑니다.**
+AI 음성 전화를 통해 여러 병원에 동시 연락하고 실시간으로 수용 가능한 응급실을 매칭하는 시스템입니다.
 
 ---
 
-## 💡 Solution
+## Tech Stack
 
-### 404 Not Found → **404 Found**
-
-AI가 응급 환자를 위한 병원을 찾아드립니다.
-
-**✨ 핵심 기능**
-
-- 🤖 **AI 음성 전화**: GPT-4o 기반 자연스러운 대화
-- 📞 **동시 다발 통화**: 10개 병원에 동시 전화 (Twilio)
-- 🎯 **실시간 매칭**: 거리/중증도 기반 우선순위 (C++)
-- ⚡ **자동 종료**: 한 병원 승인 시 나머지 자동 끊김
-- 🇰🇷 **완벽한 한국어**: Google Cloud TTS/STT
-
----
-
-## 🎬 Demo
-
-### 1. 응급대원이 체크리스트 입력
-![Step 1](https://via.placeholder.com/600x300/E8F5E9/1B5E20?text=Step+1:+Input)
-
-### 2. AI가 여러 병원에 동시 전화
-![Step 2](https://via.placeholder.com/600x300/E3F2FD/0D47A1?text=Step+2:+Call)
-
-### 3. 실시간 응답 현황
-![Step 3](https://via.placeholder.com/600x300/FFF3E0/E65100?text=Step+3:+Status)
-
-### 4. 병원 승인 즉시 알림
-![Step 4](https://via.placeholder.com/600x300/F3E5F5/4A148C?text=Step+4:+Match)
+| Category | Technology | Version |
+|----------|-----------|---------|
+| **Framework** | NestJS | 10.x |
+| **Language** | TypeScript | 5.0+ |
+| **AI & Voice** | Python FastAPI | 3.10+ |
+| **Algorithm** | C++ | 17+ |
+| **Database** | PostgreSQL (Prisma) | 15.x |
+| **Voice API** | Twilio | - |
+| **Speech** | Google Cloud TTS/STT | - |
+| **AI Model** | OpenAI GPT-4o | - |
+| **Container** | Docker Compose | - |
+| **Cloud** | AWS EC2, RDS, S3 | - |
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -99,78 +69,66 @@ AI가 응급 환자를 위한 병원을 찾아드립니다.
 
 ---
 
-## 🛠️ Tech Stack
-
-### Frontend
-- **Next.js 14** - React 서버 컴포넌트
-- **TypeScript** - 타입 안정성
-- **Tailwind CSS** - 빠른 스타일링
-- **Vercel** - 자동 배포
-
-### Backend
-- **NestJS** - 엔터프라이즈급 Node.js 프레임워크
-- **Python FastAPI** - AI/음성 처리
-- **C++** - 고성능 거리 계산
-- **Docker Compose** - 서비스 통합
-- **AWS EC2** - 프로덕션 배포
-
-### AI & Voice
-- **Twilio** - 국제 음성 통화 (190개국)
-- **Google Cloud TTS/STT** - 한국어 음성 인식/합성
-- **GPT-4o** - 자연스러운 대화
-
-### Database & Infra
-- **PostgreSQL** (Prisma ORM)
-- **AWS** - EC2, RDS, S3
-- **Docker** - 컨테이너화
-
----
-
-## 🚀 Quick Start
+## Getting Started
 
 ### Prerequisites
-```bash
-Node.js >= 18
-Python >= 3.10
-Docker & Docker Compose
-Twilio Account
-Google Cloud Account
-OpenAI API Key
-```
+
+- Node.js >= 18
+- Python >= 3.10
+- Docker & Docker Compose
+- Twilio Account
+- Google Cloud Account (Speech API)
+- OpenAI API Key
 
 ### Installation
 
-**1. Clone Repository**
 ```bash
+# 1. Clone repository
 git clone https://github.com/404-BlueYongThon/BE.git
 cd BE
-```
 
-**2. Environment Setup**
-```bash
-cp .env.example .env
-# Edit .env with your API keys
-```
-
-**3. Install Dependencies**
-```bash
+# 2. Install dependencies
 npm install
 pip install -r package/requirements.txt
-```
 
-**4. Run with Docker**
-```bash
+# 3. Environment setup
+cp .env.example .env
+# Edit .env with your credentials
+
+# 4. Database setup
+npx prisma migrate dev
+npx prisma generate
+
+# 5. Run with Docker
 docker-compose up
 ```
 
-**5. Access**
-- Frontend: https://emergency-ai-call.log8.kr
-- Backend: http://localhost:3000
-- Python API: http://localhost:8000
+### Environment Variables
+
+```env
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/emergency_db
+
+# Twilio
+TWILIO_ACCOUNT_SID=ACxxxxx
+TWILIO_AUTH_TOKEN=xxxxx
+TWILIO_NUMBER=+1xxxxxxxxxx
+
+# Google Cloud (Speech API)
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
+
+# OpenAI
+OPENAI_API_KEY=sk-xxxxx
+
+# AWS
+AWS_REGION=ap-northeast-2
+AWS_ACCESS_KEY_ID=xxxxx
+AWS_SECRET_ACCESS_KEY=xxxxx
+```
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 BE/
@@ -178,7 +136,9 @@ BE/
 │   ├── voice/             # Twilio 음성 처리
 │   ├── hospital/          # 병원 관리
 │   ├── emergency/         # 응급 요청 관리
+│   ├── app.module.ts
 │   └── main.ts
+│
 ├── package/               # Python & C++
 │   ├── ai/
 │   │   ├── stt.py        # Google STT
@@ -187,129 +147,232 @@ BE/
 │   ├── hospital/
 │   │   └── distance.cpp  # C++ 거리 계산
 │   └── twiliospeach.py   # Twilio 통합
+│
 ├── prisma/                # Database Schema
+│   └── schema.prisma
+│
 ├── test/                  # Tests
 ├── docker-compose.yml
+├── Dockerfile
 └── README.md
 ```
 
 ---
 
-## 📊 Performance
+## API Documentation
+
+### 1. Emergency Request
+
+```http
+POST /api/emergency/broadcast
+Content-Type: application/json
+
+{
+  "hospitals": [
+    { "id": 1, "phone": "+821012345678" },
+    { "id": 2, "phone": "+821087654321" }
+  ],
+  "age": "27",
+  "sex": "male",
+  "category": "trauma",
+  "symptom": "복부 출혈",
+  "remarks": "의식 명료, 활력 징후 안정",
+  "grade": 2,
+  "callback_url": "https://example.com/callback"
+}
+```
+
+**Response:**
+```json
+{
+  "status": "processing",
+  "emergency_id": "uuid-here"
+}
+```
+
+### 2. Call Status
+
+```http
+GET /api/emergency/status/:emergency_id
+```
+
+**Response:**
+```json
+{
+  "emergency_id": "uuid-here",
+  "results": [
+    { "hospital_id": 1, "status": "accepted" },
+    { "hospital_id": 2, "status": "rejected" }
+  ]
+}
+```
+
+---
+
+## Development
+
+### Build
+
+```bash
+# NestJS
+npm run build
+
+# Python
+python -m compileall package/
+
+# C++
+cd package/hospital && g++ -o distance distance.cpp -std=c++17
+```
+
+### Test
+
+```bash
+# Unit tests
+npm run test
+
+# E2E tests
+npm run test:e2e
+
+# Coverage
+npm run test:cov
+```
+
+### Linting
+
+```bash
+npm run lint
+npm run format
+```
+
+---
+
+## Deployment
+
+### Docker
+
+```bash
+# Build images
+docker-compose build
+
+# Run containers
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop containers
+docker-compose down
+```
+
+### AWS EC2
+
+```bash
+# 1. SSH to EC2 instance
+ssh -i key.pem ubuntu@ec2-xx-xx-xx-xx.compute.amazonaws.com
+
+# 2. Pull latest code
+git pull origin main
+
+# 3. Rebuild and restart
+docker-compose up -d --build
+
+# 4. Check status
+docker-compose ps
+```
+
+---
+
+## CI/CD
+
+### GitHub Actions
+
+- **CI**: PR 생성 시 자동 빌드 및 테스트
+- **CD**: `main` 브랜치 머지 시 AWS EC2 자동 배포
+
+`.github/workflows/ci.yml`:
+```yaml
+name: CI
+on: [pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+      - run: npm install
+      - run: npm run build
+      - run: npm test
+```
+
+---
+
+## Performance
 
 | Metric | Before | After | Improvement |
 |--------|--------|-------|-------------|
-| 병원 매칭 시간 | 10분+ | 1분 이내 | **90% ↓** |
-| 전화 횟수 | 평균 7회 | 동시 10회 | **효율 300% ↑** |
-| 응급대원 부담 | 환자+전화 동시 | 환자만 집중 | **스트레스 50% ↓** |
-| 골든타임 활용 | 10분 소비 | 9분 확보 | **생존율 ↑** |
+| Hospital Matching Time | 10+ min | < 1 min | **90% ↓** |
+| Call Efficiency | Sequential (avg 7 calls) | Parallel (10 calls) | **300% ↑** |
+| Paramedic Workload | Patient + Calling | Patient Only | **50% ↓** |
+| Golden Time Utilization | 10 min wasted | 9 min saved | **Survival Rate ↑** |
 
 ---
 
-## 👥 Team
+## Contributing
 
-<table>
-  <tr>
-    <td align="center">
-      <img src="https://github.com/sweetheart.png" width="100px;" alt=""/>
-      <br />
-      <b>김덕환</b><br />
-      <sub>수학과</sub><br />
-      <sub>Full Stack</sub>
-    </td>
-    <td align="center">
-      <img src="https://via.placeholder.com/100" width="100px;" alt=""/>
-      <br />
-      <b>김대준</b><br />
-      <sub>소프트웨어</sub><br />
-      <sub>Backend & Infra</sub>
-    </td>
-    <td align="center">
-      <img src="https://via.placeholder.com/100" width="100px;" alt=""/>
-      <br />
-      <b>정현승</b><br />
-      <sub>소프트웨어</sub><br />
-      <sub>Backend</sub>
-    </td>
-    <td align="center">
-      <img src="https://via.placeholder.com/100" width="100px;" alt=""/>
-      <br />
-      <b>최대영</b><br />
-      <sub>전자전기</sub><br />
-      <sub>AI & Algorithm</sub>
-    </td>
-  </tr>
-</table>
+### Branch Strategy
+
+- `main`: Production-ready code
+- `dev`: Development integration
+- `feature/<description>`: Feature branches
+
+### Commit Convention
+
+```
+feat: Add new feature
+fix: Bug fix
+docs: Documentation updates
+refactor: Code refactoring
+test: Test updates
+chore: Build/tooling changes
+```
+
+### Pull Request
+
+1. Fork the repository
+2. Create feature branch
+3. Commit changes
+4. Push to branch
+5. Create Pull Request
 
 ---
 
-## 🎯 Roadmap
+## Team
 
-### Phase 1: MVP (해커톤) ✅
-- [x] Twilio 음성 통화
-- [x] 기본 AI 대화
-- [x] Frontend 배포
-- [x] Docker 통합
-
-### Phase 2: 병원 파일럿 (2-3개월)
-- [ ] 실제 병원 협업
-- [ ] 의료법 규제 대응
-- [ ] HIPAA 보안 강화
-- [ ] 성능 최적화
-
-### Phase 3: 전국 확대 (6개월)
-- [ ] 전국 병원 DB 구축
-- [ ] 실시간 응급실 현황 연동
-- [ ] 모바일 앱 (iOS/Android)
-- [ ] 119 시스템 통합
-
-### Phase 4: 글로벌 (1년+)
-- [ ] 다국어 지원 (영어, 일본어, 중국어)
-- [ ] 190개국 Twilio 번호
-- [ ] WHO 응급 의료 표준 준수
+| Name | Role | GitHub |
+|------|------|--------|
+| 김덕환 | Full Stack | [@sweetheart](https://github.com/sweetheart) |
+| 김대준 | Backend & Infra | [@cau20232907](https://github.com/cau20232907) |
+| 정현승 | Backend | [@maximum-0000](https://github.com/maximum-0000) |
+| 최대영 | AI & Algorithm | [@meojun](https://github.com/meojun) |
 
 ---
 
-## 🌟 Why "404 Found"?
-
-**404 Not Found** (찾을 수 없음)  
-→ **404 Found** (찾았습니다!)
-
-응급 환자를 위한 병원을,  
-AI가 찾아드립니다.
-
----
-
-## 📜 License
+## License
 
 MIT License - see [LICENSE](LICENSE) file
 
 ---
 
-## 🙏 Acknowledgments
+## Contact
+
+- **Website**: [emergency-ai-call.log8.kr](https://emergency-ai-call.log8.kr)
+- **Email**: sachi009955@gmail.com
+- **Organization**: [@404-BlueYongThon](https://github.com/404-BlueYongThon)
+
+---
+
+## Acknowledgments
 
 - **중앙대학교 청룡톤 2026**
 - **UNIVERSITY MAKEUS CHALLENGE CAU**
 - **Google Developer Groups (On Campus · Chung-Ang University)**
-- 팀원 지인분의 용기 있는 실제 경험 공유
-
----
-
-## 📞 Contact
-
-- 🌐 Website: [emergency-ai-call.log8.kr](https://emergency-ai-call.log8.kr)
-- 📧 Email: sachi009955@gmail.com
-- 💬 Discord: [UMCAU](https://discord.gg/umcau)
-- 🐙 GitHub: [@404-BlueYongThon](https://github.com/404-BlueYongThon)
-
----
-
-<div align="center">
-
-**Made with ❤️ by 404 BlueYongThon**
-
-*작고 귀여운 서비스로 소중한 생명을 지킵니다*
-
-[⬆ Back to top](#404-found-emergency-ai-call-system)
-
-</div>
