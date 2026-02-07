@@ -1,26 +1,39 @@
-import { Injectable } from '@nestjs/common';
-import { Subject, Observable, filter, map } from 'rxjs';
-
-export interface SseEvent {
-  patientId: number;
-  data: any;
-}
+import { Injectable, MessageEvent } from '@nestjs/common';
+import { Observable, Subject } from 'rxjs';
 
 @Injectable()
 export class EmergencySseService {
-  private eventSubject = new Subject<SseEvent>();
+  // 클라이언트(환자 앱/병원 앱)별로 이벤트를 전송하기 위한 Subject 맵
+  private clients = new Map<string, Subject<MessageEvent>>();
 
-  // 병원이 수락/거절했을 때 이 메서드를 호출합니다.
-  emitEvent(patientId: number, data: any) {
-    this.eventSubject.next({ patientId, data });
+  // 클라이언트가 SSE 연결을 맺을 때 호출
+  subscribe(id: string): Observable<MessageEvent> {
+    return new Observable<MessageEvent>((subscriber) => {
+      const subject = new Subject<MessageEvent>();
+      this.clients.set(id, subject);
+
+      const subscription = subject.subscribe(subscriber);
+
+      // 연결 직후 이벤트 (Postman 등에서 연결 확인용)
+      subscriber.next({ data: { message: 'connected' } });
+
+      return () => {
+        subscription.unsubscribe();
+        this.clients.delete(id);
+      };
+    });
   }
 
-  // 구급요원이 SSE 연결을 했을 때 호출되는 스트림입니다.
-  getEventStream(patientId: number): Observable<any> {
-    return this.eventSubject.asObservable().pipe(
-      // 해당 환자 ID에 맞는 이벤트만 필터링해서 보냅니다.
-      filter((event) => event.patientId === patientId),
-      map((event) => ({ data: event.data })),
-    );
+  // 특정 클라이언트에게 이벤트 전송
+  emit(id: string, data: any) {
+    const client = this.clients.get(id);
+    if (client) {
+      client.next({ data });
+    }
+  }
+
+  // 연결 종료 시 정리
+  unsubscribe(id: string) {
+    this.clients.delete(id);
   }
 }
