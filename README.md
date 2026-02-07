@@ -16,16 +16,15 @@ AI 음성 전화를 통해 여러 병원에 동시 연락하고 실시간으로 
 
 | Category | Technology | Version |
 |----------|-----------|---------|
-| **Framework** | NestJS | 10.x |
+| **Framework** | NestJS | 11.0.0 |
 | **Language** | TypeScript | 5.0+ |
 | **AI & Voice** | Python FastAPI | 3.10+ |
-| **Algorithm** | C++ | 17+ |
-| **Database** | PostgreSQL (Prisma) | 15.x |
+| **Algorithm** | Nest.js | 11.0.0 |
+| **Database** | MySQL (Prisma) | 8.4 |
 | **Voice API** | Twilio | - |
 | **Speech** | Google Cloud TTS/STT | - |
 | **AI Model** | OpenAI GPT-4o | - |
-| **Container** | Docker Compose | - |
-| **Cloud** | AWS EC2, RDS, S3 | - |
+| **Cloud** | AWS EC2, RDS | - |
 
 ---
 
@@ -33,26 +32,26 @@ AI 음성 전화를 통해 여러 병원에 동시 연락하고 실시간으로 
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    Frontend (Next.js)                    │
-│              emergency-ai-call.log8.kr                   │
+│                    Frontend (Next.js)                   │
+│              emergency-ai-call.log8.kr                  │
 └────────────────────┬────────────────────────────────────┘
                      │ HTTPS
 ┌────────────────────▼────────────────────────────────────┐
-│                  Backend (NestJS)                        │
-│                   AWS EC2 + Docker                       │
-├──────────────┬──────────────┬──────────────────────────┤
+│                  Backend (NestJS)                       │
+│                   AWS EC2                               │
+├──────────────┬──────────────┬───────────────────────────┤
 │ Voice Module │ Hospital API │ Emergency Manager         │
-└──────┬───────┴──────┬───────┴──────────────────────────┘
+└──────┬───────┴──────┬───────┴───────────────────────────┘
        │              │
        ▼              ▼
-┌─────────────┐  ┌──────────────┐
-│   Python    │  │     C++      │
-│   FastAPI   │  │   Library    │
-├─────────────┤  ├──────────────┤
-│ - STT       │  │ - Distance   │
-│ - TTS       │  │ - Priority   │
-│ - GPT-4o    │  │ - Async      │
-└──────┬──────┘  └──────┬───────┘
+┌─────────────┐  ┌────────────────────┐
+│   Python    │  │      Database      │
+│   FastAPI   │  │ query optimization │
+├─────────────┤  ├────────────────────┤
+│ - STT       │  │ - Distance         │
+│ - TTS       │  │ - Priority         │
+│ - GPT-4o    │  │                    │
+└──────┬──────┘  └──────┬─────────────┘
        │                │
        └────────┬───────┘
                 ▼
@@ -73,12 +72,10 @@ AI 음성 전화를 통해 여러 병원에 동시 연락하고 실시간으로 
 
 ### Prerequisites
 
-- Node.js >= 18
+- Node.js >= 22
 - Python >= 3.10
-- Docker & Docker Compose
 - Twilio Account
 - Google Cloud Account (Speech API)
-- OpenAI API Key
 
 ### Installation
 
@@ -107,7 +104,7 @@ docker-compose up
 
 ```env
 # Database
-DATABASE_URL=postgresql://user:password@localhost:5432/emergency_db
+DATABASE_URL=mysql://user:password@localhost:5432/emergency_db
 
 # Twilio
 TWILIO_ACCOUNT_SID=ACxxxxx
@@ -116,14 +113,6 @@ TWILIO_NUMBER=+1xxxxxxxxxx
 
 # Google Cloud (Speech API)
 GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
-
-# OpenAI
-OPENAI_API_KEY=sk-xxxxx
-
-# AWS
-AWS_REGION=ap-northeast-2
-AWS_ACCESS_KEY_ID=xxxxx
-AWS_SECRET_ACCESS_KEY=xxxxx
 ```
 
 ---
@@ -132,28 +121,23 @@ AWS_SECRET_ACCESS_KEY=xxxxx
 
 ```
 BE/
-├── src/                    # NestJS Backend
-│   ├── voice/             # Twilio 음성 처리
-│   ├── hospital/          # 병원 관리
-│   ├── emergency/         # 응급 요청 관리
+├── src/                   # NestJS Backend
+│   ├── dto/               # 전달 객체
+│   ├── app.controller.ts  # 병원 관리
 │   ├── app.module.ts
+│   ├── app.service.ts     # 응급 요청 관리
+│   ├── emergency-sse.service.ts  
+│   ├── prisma.ts
 │   └── main.ts
 │
 ├── package/               # Python & C++
-│   ├── ai/
-│   │   ├── stt.py        # Google STT
-│   │   ├── tts.py        # Google TTS
-│   │   └── gpt.py        # GPT-4o
-│   ├── hospital/
-│   │   └── distance.cpp  # C++ 거리 계산
+│   ├── requirements.txt
 │   └── twiliospeach.py   # Twilio 통합
 │
 ├── prisma/                # Database Schema
 │   └── schema.prisma
 │
 ├── test/                  # Tests
-├── docker-compose.yml
-├── Dockerfile
 └── README.md
 ```
 
@@ -185,24 +169,37 @@ Content-Type: application/json
 **Response:**
 ```json
 {
-  "status": "processing",
-  "emergency_id": "uuid-here"
+    "success": true,
+    "message": "매칭 프로세스가 시작되었습니다.",
+    "patientId": 18,
+    "channel": "patient-18"
 }
 ```
 
 ### 2. Call Status
 
 ```http
-GET /api/emergency/status/:emergency_id
+POST /api/emergency/callback
 ```
 
 **Response:**
 ```json
 {
-  "emergency_id": "uuid-here",
+  "emergency_id": "c4a19f5c-2571-41a4-b5db-a56c5beb4a55",
+  "patientId": 1,
   "results": [
-    { "hospital_id": 1, "status": "accepted" },
-    { "hospital_id": 2, "status": "rejected" }
+    {
+      "hospitalId": 1,
+      "status": "accepted"
+    },
+    {
+      "hospitalId": 2,
+      "status": "rejected"
+    },
+    {
+      "hospitalId": 3,
+      "status": "no_answer"
+    }
   ]
 }
 ```
@@ -218,11 +215,8 @@ GET /api/emergency/status/:emergency_id
 npm run build
 
 # Python
-python -m compileall package/
+python python twiliospeach.py
 
-# C++
-cd package/hospital && g++ -o distance distance.cpp -std=c++17
-```
 
 ### Test
 
@@ -246,66 +240,6 @@ npm run format
 
 ---
 
-## Deployment
-
-### Docker
-
-```bash
-# Build images
-docker-compose build
-
-# Run containers
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Stop containers
-docker-compose down
-```
-
-### AWS EC2
-
-```bash
-# 1. SSH to EC2 instance
-ssh -i key.pem ubuntu@ec2-xx-xx-xx-xx.compute.amazonaws.com
-
-# 2. Pull latest code
-git pull origin main
-
-# 3. Rebuild and restart
-docker-compose up -d --build
-
-# 4. Check status
-docker-compose ps
-```
-
----
-
-## CI/CD
-
-### GitHub Actions
-
-- **CI**: PR 생성 시 자동 빌드 및 테스트
-- **CD**: `main` 브랜치 머지 시 AWS EC2 자동 배포
-
-`.github/workflows/ci.yml`:
-```yaml
-name: CI
-on: [pull_request]
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-      - run: npm install
-      - run: npm run build
-      - run: npm test
-```
-
----
-
 ## Performance
 
 | Metric | Before | After | Improvement |
@@ -316,8 +250,6 @@ jobs:
 | Golden Time Utilization | 10 min wasted | 9 min saved | **Survival Rate ↑** |
 
 ---
-
-## Contributing
 
 ### Branch Strategy
 
@@ -336,14 +268,6 @@ test: Test updates
 chore: Build/tooling changes
 ```
 
-### Pull Request
-
-1. Fork the repository
-2. Create feature branch
-3. Commit changes
-4. Push to branch
-5. Create Pull Request
-
 ---
 
 ## Team
@@ -351,9 +275,9 @@ chore: Build/tooling changes
 | Name | Role | GitHub |
 |------|------|--------|
 | 김덕환 | Full Stack | [@sweetheart](https://github.com/sweetheart) |
-| 김대준 | Backend & Infra | [@cau20232907](https://github.com/cau20232907) |
-| 정현승 | Backend | [@maximum-0000](https://github.com/maximum-0000) |
-| 최대영 | AI & Algorithm | [@meojun](https://github.com/meojun) |
+| 정현승 | Backend & Infra | [@cau20232907](https://github.com/cau20232907) |
+| 김대준 | AI & Algorithm | [@maximum-0000](https://github.com/maximum-0000) |
+| 최대영 | Backend | [@meojun](https://github.com/meojun) |
 
 ---
 
